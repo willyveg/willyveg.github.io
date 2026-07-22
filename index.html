@@ -519,16 +519,17 @@
     return payment.paidDates.includes(dateStr);
   }
 
+  // ✅ ИСПРАВЛЕНО: зона риска считается ОТНОСИТЕЛЬНО даты ячейки календаря
   function getDayClass(dateStr) {
     const today = new Date();
     today.setHours(0,0,0,0);
     const checkDate = parseLocalDate(dateStr);
     const diffDays = Math.ceil((checkDate - today) / (1000 * 60 * 60 * 24));
     
-    if (diffDays < 0) return 'critical';
-    if (diffDays === 0) return 'critical';
-    if (diffDays <= riskDays) return 'warning';
-    return 'safe';
+    if (diffDays < 0) return 'critical'; // просрочено
+    if (diffDays === 0) return 'critical'; // сегодня
+    if (diffDays <= riskDays) return 'warning'; // зона риска
+    return 'safe'; // безопасно
   }
 
   // Возвращает неоплаченные платежи для конкретной даты
@@ -551,7 +552,6 @@
     
     for (let day = 1; day <= 31; day++) {
       const dayStr = `${prefix}-${String(day).padStart(2, '0')}`;
-      // Проверяем, что дата валидна (например, 31 февраля не существует)
       const testDate = parseLocalDate(dayStr);
       if (testDate.getMonth() !== month) continue;
       
@@ -599,7 +599,8 @@
       cell.className = 'day';
       
       if (activePayments.length > 0) {
-        const classes = activePayments.map(p => getDayClass(p.date));
+        // ✅ ИСПРАВЛЕНО: передаём dateStr ячейки, а не p.date
+        const classes = activePayments.map(() => getDayClass(dateStr));
         if (classes.includes('critical')) cell.classList.add('critical');
         else if (classes.includes('warning')) cell.classList.add('warning');
         else cell.classList.add('safe');
@@ -607,7 +608,6 @@
         const totalAmount = activePayments.reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0);
         cell.innerHTML = `<span>${day}</span><span class="amount">${totalAmount}₽</span><span class="coin">🪙</span>`;
       } else if (hasPaid) {
-        // Все платежи на эту дату оплачены — показываем серым
         cell.classList.add('paid');
         const paidPayments = allPayments.filter(p => isPaymentPaidOnDate(p, dateStr));
         const totalAmount = paidPayments.reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0);
@@ -652,7 +652,6 @@
 
     const listEl = document.getElementById('monthPayments');
     
-    // Разделяем на оплаченные и неоплаченные
     const pendingItems = monthPayments.filter(({payment, date}) => !isPaymentPaidOnDate(payment, date));
     const paidItems = monthPayments.filter(({payment, date}) => isPaymentPaidOnDate(payment, date));
     
@@ -707,18 +706,14 @@
 
   function renderAllPaymentsList() {
     const list = document.getElementById('allPaymentsList');
-    const activePayments = payments.filter(p => {
-      // Показываем платежи, у которых есть хотя бы одна неоплаченная дата в будущем
-      return true; // показываем все
-    });
     
-    if (activePayments.length === 0) {
+    if (payments.length === 0) {
       list.innerHTML = '<p style="color:#888;font-size:13px;text-align:center;margin-top:12px;">Нет платежей</p>';
       return;
     }
     
     list.innerHTML = '<h3 style="font-size:14px;margin:12px 0 8px;">📋 Все платежи</h3>' + 
-      activePayments.map((p) => {
+      payments.map((p) => {
         const idx = payments.indexOf(p);
         const paidCount = p.paidDates ? p.paidDates.length : 0;
         return `
@@ -734,17 +729,14 @@
       }).join('');
   }
 
-  // Отметить платёж как оплаченный на КОНКРЕТНУЮ дату
   function togglePaid(index, dateStr) {
     const payment = payments[index];
     if (!payment.paidDates) payment.paidDates = [];
     
     const paidIndex = payment.paidDates.indexOf(dateStr);
     if (paidIndex > -1) {
-      // Снимаем отметку
       payment.paidDates.splice(paidIndex, 1);
     } else {
-      // Ставим отметку
       payment.paidDates.push(dateStr);
     }
     
