@@ -1,0 +1,819 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Календарь платежей</title>
+
+<!-- iOS оптимизация -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#667eea">
+<link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💰</text></svg>">
+
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+  
+  body {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    min-height: 100vh;
+    padding: 20px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+  }
+
+  .app {
+    background: #fff;
+    border-radius: 24px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+    max-width: 480px;
+    width: 100%;
+    overflow: hidden;
+  }
+
+  .header {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 24px;
+    text-align: center;
+  }
+
+  .header h1 { font-size: 22px; margin-bottom: 16px; }
+
+  .month-nav {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .month-nav button {
+    background: rgba(255,255,255,0.2);
+    border: none;
+    color: white;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 18px;
+    transition: background 0.2s;
+  }
+
+  .month-nav button:hover { background: rgba(255,255,255,0.3); }
+  .month-nav .month-label { font-size: 18px; font-weight: 600; }
+
+  .calendar {
+    padding: 16px;
+  }
+
+  .weekdays {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 4px;
+    margin-bottom: 8px;
+  }
+
+  .weekdays div {
+    text-align: center;
+    font-size: 12px;
+    color: #888;
+    font-weight: 600;
+    padding: 8px 0;
+  }
+
+  .days {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 4px;
+  }
+
+  .day {
+    aspect-ratio: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    border-radius: 12px;
+    cursor: pointer;
+    position: relative;
+    transition: transform 0.15s;
+    font-size: 14px;
+    font-weight: 500;
+    background: #f5f5f7;
+  }
+
+  .day:hover { transform: scale(1.05); }
+  .day.empty { background: transparent; cursor: default; }
+  .day.empty:hover { transform: none; }
+
+  .day.safe { background: linear-gradient(135deg, #d4f5d4 0%, #a8e6a8 100%); color: #2d6a2d; }
+  .day.warning { background: linear-gradient(135deg, #ffe0b2 0%, #ffb74d 100%); color: #e65100; }
+  .day.critical { background: linear-gradient(135deg, #ff6b6b 0%, #ee5a52 100%); color: white; font-weight: 700; }
+  .day.today { box-shadow: 0 0 0 2px #667eea; }
+  .day.paid { background: linear-gradient(135deg, #e0e0e0 0%, #bdbdbd 100%); color: #757575; opacity: 0.7; }
+
+  .day .coin {
+    font-size: 10px;
+    position: absolute;
+    bottom: 2px;
+    right: 3px;
+  }
+
+  .day .amount {
+    font-size: 9px;
+    opacity: 0.8;
+    margin-top: 2px;
+  }
+
+  .legend {
+    display: flex;
+    justify-content: center;
+    gap: 12px;
+    padding: 12px 16px;
+    font-size: 11px;
+    color: #666;
+    flex-wrap: wrap;
+  }
+
+  .legend-item { display: flex; align-items: center; gap: 4px; }
+  .legend-dot { width: 10px; height: 10px; border-radius: 50%; }
+  .legend-dot.safe { background: #a8e6a8; }
+  .legend-dot.warning { background: #ffb74d; }
+  .legend-dot.critical { background: #ee5a52; }
+  .legend-dot.paid { background: #bdbdbd; }
+
+  .month-summary {
+    background: linear-gradient(135deg, #f5f7fa 0%, #e4e8eb 100%);
+    padding: 16px;
+    border-top: 1px solid #e0e0e0;
+  }
+
+  .summary-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: #555;
+    margin-bottom: 12px;
+  }
+
+  .summary-stats {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-bottom: 12px;
+  }
+
+  .stat-box {
+    background: white;
+    padding: 12px;
+    border-radius: 12px;
+    text-align: center;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+  }
+
+  .stat-label {
+    font-size: 11px;
+    color: #888;
+    margin-bottom: 4px;
+  }
+
+  .stat-value {
+    font-size: 20px;
+    font-weight: 700;
+    color: #667eea;
+  }
+
+  .stat-value.paid { color: #4caf50; }
+  .stat-value.pending { color: #ff9800; }
+
+  .month-payments {
+    background: white;
+    border-radius: 12px;
+    padding: 12px;
+    margin-top: 8px;
+  }
+
+  .payment-item {
+    display: flex;
+    align-items: center;
+    padding: 10px;
+    background: #f8f9fa;
+    border-radius: 10px;
+    margin-bottom: 8px;
+    font-size: 13px;
+    transition: all 0.2s;
+  }
+
+  .payment-item:hover {
+    background: #f0f2f5;
+    transform: translateX(2px);
+  }
+
+  .payment-item.paid {
+    background: #e8f5e9;
+    opacity: 0.7;
+  }
+
+  .payment-checkbox {
+    width: 22px;
+    height: 22px;
+    margin-right: 10px;
+    cursor: pointer;
+    accent-color: #4caf50;
+  }
+
+  .payment-info {
+    flex: 1;
+  }
+
+  .payment-name {
+    font-weight: 600;
+    color: #333;
+    margin-bottom: 2px;
+  }
+
+  .payment-date {
+    color: #888;
+    font-size: 12px;
+  }
+
+  .payment-amount {
+    font-weight: 700;
+    color: #667eea;
+    margin-right: 8px;
+  }
+
+  .payment-item.paid .payment-amount {
+    color: #4caf50;
+    text-decoration: line-through;
+  }
+
+  .payment-delete {
+    background: #ff4757;
+    color: white;
+    border: none;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .controls {
+    padding: 16px;
+    border-top: 1px solid #eee;
+    display: flex;
+    gap: 8px;
+  }
+
+  .controls button {
+    flex: 1;
+    padding: 12px;
+    border: none;
+    border-radius: 12px;
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 14px;
+    transition: transform 0.15s;
+  }
+
+  .controls button:hover { transform: translateY(-2px); }
+  .btn-add { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; }
+  .btn-clear { background: #f0f0f0; color: #666; }
+
+  .modal {
+    display: none;
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.5);
+    z-index: 100;
+    justify-content: center;
+    align-items: center;
+    padding: 20px;
+  }
+
+  .modal.active { display: flex; }
+
+  .modal-content {
+    background: white;
+    border-radius: 20px;
+    padding: 24px;
+    max-width: 400px;
+    width: 100%;
+    max-height: 90vh;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .modal-content h2 { margin-bottom: 16px; color: #333; }
+
+  .form-group { margin-bottom: 14px; }
+  .form-group label { display: block; margin-bottom: 6px; font-size: 13px; color: #666; font-weight: 600; }
+  .form-group input, .form-group select {
+    width: 100%;
+    padding: 10px 12px;
+    border: 2px solid #e0e0e0;
+    border-radius: 10px;
+    font-size: 14px;
+    transition: border-color 0.2s;
+  }
+  .form-group input:focus, .form-group select:focus { outline: none; border-color: #667eea; }
+
+  .modal-buttons { display: flex; gap: 8px; margin-top: 16px; }
+  .modal-buttons button {
+    flex: 1;
+    padding: 12px;
+    border: none;
+    border-radius: 10px;
+    cursor: pointer;
+    font-weight: 600;
+  }
+  .btn-save { background: #667eea; color: white; }
+  .btn-cancel { background: #f0f0f0; color: #666; }
+
+  .all-payments-list { margin-top: 16px; }
+  .all-payment-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 12px;
+    background: #f5f5f7;
+    border-radius: 10px;
+    margin-bottom: 8px;
+    font-size: 13px;
+  }
+
+  .all-payment-item .info { flex: 1; }
+  .all-payment-item .name { font-weight: 600; color: #333; }
+  .all-payment-item .date { color: #888; font-size: 12px; }
+  .all-payment-item .sum { font-weight: 700; color: #667eea; margin-right: 8px; }
+  .all-payment-item .delete {
+    background: #ff4757;
+    color: white;
+    border: none;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 14px;
+  }
+
+  .settings { margin-top: 16px; padding-top: 16px; border-top: 1px solid #eee; }
+  .settings h3 { font-size: 14px; margin-bottom: 10px; color: #333; }
+</style>
+</head>
+<body>
+
+<div class="app">
+  <div class="header">
+    <h1> Календарь платежей</h1>
+    <div class="month-nav">
+      <button onclick="changeMonth(-1)">‹</button>
+      <span class="month-label" id="monthLabel"></span>
+      <button onclick="changeMonth(1)">›</button>
+    </div>
+  </div>
+
+  <div class="calendar">
+    <div class="weekdays">
+      <div>Пн</div><div>Вт</div><div>Ср</div><div>Чт</div><div>Пт</div><div>Сб</div><div>Вс</div>
+    </div>
+    <div class="days" id="daysGrid"></div>
+  </div>
+
+  <div class="legend">
+    <div class="legend-item"><div class="legend-dot safe"></div>Безопасно</div>
+    <div class="legend-item"><div class="legend-dot warning"></div>Зона риска</div>
+    <div class="legend-item"><div class="legend-dot critical"></div>Пора платить!</div>
+    <div class="legend-item"><div class="legend-dot paid"></div>Оплачено</div>
+  </div>
+
+  <div class="month-summary">
+    <div class="summary-title">📊 Платежи в этом месяце</div>
+    <div class="summary-stats">
+      <div class="stat-box">
+        <div class="stat-label">Всего</div>
+        <div class="stat-value" id="totalAmount">0₽</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-label">Оплачено</div>
+        <div class="stat-value paid" id="paidAmount">0₽</div>
+      </div>
+    </div>
+    <div class="summary-stats">
+      <div class="stat-box">
+        <div class="stat-label">К оплате</div>
+        <div class="stat-value pending" id="pendingAmount">0₽</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-label">Прогресс</div>
+        <div class="stat-value" id="progressPercent">0%</div>
+      </div>
+    </div>
+    <div class="month-payments" id="monthPayments"></div>
+  </div>
+
+  <div class="controls">
+    <button class="btn-add" onclick="openModal()">+ Добавить платёж</button>
+    <button class="btn-clear" onclick="clearAll()">Очистить всё</button>
+  </div>
+</div>
+
+<div class="modal" id="modal">
+  <div class="modal-content">
+    <h2 id="modalTitle">Новый платёж</h2>
+    
+    <div class="form-group">
+      <label>Название</label>
+      <input type="text" id="payName" placeholder="Аренда, кредит, подписка...">
+    </div>
+    
+    <div class="form-group">
+      <label>Сумма (₽)</label>
+      <input type="number" id="payAmount" placeholder="1500">
+    </div>
+    
+    <div class="form-group">
+      <label>Дата платежа</label>
+      <input type="date" id="payDate">
+    </div>
+    
+    <div class="form-group">
+      <label>Повторять</label>
+      <select id="payRepeat">
+        <option value="none">Один раз</option>
+        <option value="monthly">Ежемесячно</option>
+        <option value="yearly">Ежегодно</option>
+      </select>
+    </div>
+
+    <div class="settings">
+      <h3>⚙️ Зона риска (дней до платежа)</h3>
+      <div class="form-group">
+        <input type="number" id="riskDays" value="5" min="1" max="30">
+      </div>
+    </div>
+
+    <div class="modal-buttons">
+      <button class="btn-cancel" onclick="closeModal()">Отмена</button>
+      <button class="btn-save" onclick="savePayment()">Сохранить</button>
+    </div>
+
+    <div class="all-payments-list" id="allPaymentsList"></div>
+  </div>
+</div>
+
+<script>
+  let currentDate = new Date();
+  let payments = JSON.parse(localStorage.getItem('payments') || '[]');
+  let riskDays = parseInt(localStorage.getItem('riskDays') || '5');
+
+  const monthNames = ['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
+
+  function save() {
+    localStorage.setItem('payments', JSON.stringify(payments));
+    localStorage.setItem('riskDays', riskDays);
+  }
+
+  function formatDateLocal(date) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+
+  function parseLocalDate(dateStr) {
+    const [year, month, day] = dateStr.split('-').map(Number);
+    return new Date(year, month - 1, day);
+  }
+
+  function changeMonth(delta) {
+    currentDate.setMonth(currentDate.getMonth() + delta);
+    render();
+  }
+
+  // Проверяет, является ли платёж актуальным для конкретной даты
+  function isPaymentForDate(payment, dateStr) {
+    const cDate = parseLocalDate(dateStr);
+    const pDate = parseLocalDate(payment.date);
+    
+    if (cDate < pDate) return false; // дата раньше базовой
+    
+    if (payment.repeat === 'none') {
+      return payment.date === dateStr;
+    }
+    if (payment.repeat === 'monthly') {
+      return pDate.getDate() === cDate.getDate();
+    }
+    if (payment.repeat === 'yearly') {
+      return pDate.getDate() === cDate.getDate() && pDate.getMonth() === cDate.getMonth();
+    }
+    return false;
+  }
+
+  // Проверяет, оплачен ли платёж на конкретную дату
+  function isPaymentPaidOnDate(payment, dateStr) {
+    if (!payment.paidDates) return false;
+    return payment.paidDates.includes(dateStr);
+  }
+
+  function getDayClass(dateStr) {
+    const today = new Date();
+    today.setHours(0,0,0,0);
+    const checkDate = parseLocalDate(dateStr);
+    const diffDays = Math.ceil((checkDate - today) / (1000 * 60 * 60 * 24));
+    
+    if (diffDays < 0) return 'critical';
+    if (diffDays === 0) return 'critical';
+    if (diffDays <= riskDays) return 'warning';
+    return 'safe';
+  }
+
+  // Возвращает неоплаченные платежи для конкретной даты
+  function getActivePaymentsForDate(dateStr) {
+    return payments.filter(p => 
+      isPaymentForDate(p, dateStr) && !isPaymentPaidOnDate(p, dateStr)
+    );
+  }
+
+  // Возвращает все платежи (включая оплаченные) для конкретной даты
+  function getAllPaymentsForDate(dateStr) {
+    return payments.filter(p => isPaymentForDate(p, dateStr));
+  }
+
+  // Возвращает все платежи (активные и оплаченные) для конкретного месяца
+  function getMonthPayments(year, month) {
+    const monthStr = String(month + 1).padStart(2, '0');
+    const prefix = `${year}-${monthStr}`;
+    const result = [];
+    
+    for (let day = 1; day <= 31; day++) {
+      const dayStr = `${prefix}-${String(day).padStart(2, '0')}`;
+      // Проверяем, что дата валидна (например, 31 февраля не существует)
+      const testDate = parseLocalDate(dayStr);
+      if (testDate.getMonth() !== month) continue;
+      
+      const dayPayments = getAllPaymentsForDate(dayStr);
+      dayPayments.forEach(p => {
+        result.push({
+          payment: p,
+          date: dayStr
+        });
+      });
+    }
+    return result;
+  }
+
+  function render() {
+    const year = currentDate.getFullYear();
+    const month = currentDate.getMonth();
+    document.getElementById('monthLabel').textContent = `${monthNames[month]} ${year}`;
+
+    const firstDay = new Date(year, month, 1);
+    const lastDay = new Date(year, month + 1, 0);
+    const startWeekday = (firstDay.getDay() + 6) % 7;
+
+    const grid = document.getElementById('daysGrid');
+    grid.innerHTML = '';
+
+    for (let i = 0; i < startWeekday; i++) {
+      const empty = document.createElement('div');
+      empty.className = 'day empty';
+      grid.appendChild(empty);
+    }
+
+    const today = new Date();
+    today.setHours(0,0,0,0);
+    const todayStr = formatDateLocal(today);
+
+    for (let day = 1; day <= lastDay.getDate(); day++) {
+      const date = new Date(year, month, day);
+      const dateStr = formatDateLocal(date);
+      const activePayments = getActivePaymentsForDate(dateStr);
+      const allPayments = getAllPaymentsForDate(dateStr);
+      const hasPaid = allPayments.some(p => isPaymentPaidOnDate(p, dateStr));
+      
+      const cell = document.createElement('div');
+      cell.className = 'day';
+      
+      if (activePayments.length > 0) {
+        const classes = activePayments.map(p => getDayClass(p.date));
+        if (classes.includes('critical')) cell.classList.add('critical');
+        else if (classes.includes('warning')) cell.classList.add('warning');
+        else cell.classList.add('safe');
+        
+        const totalAmount = activePayments.reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0);
+        cell.innerHTML = `<span>${day}</span><span class="amount">${totalAmount}₽</span><span class="coin">🪙</span>`;
+      } else if (hasPaid) {
+        // Все платежи на эту дату оплачены — показываем серым
+        cell.classList.add('paid');
+        const paidPayments = allPayments.filter(p => isPaymentPaidOnDate(p, dateStr));
+        const totalAmount = paidPayments.reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0);
+        cell.innerHTML = `<span>${day}</span><span class="amount">${totalAmount}₽</span><span class="coin">✓</span>`;
+      } else {
+        cell.textContent = day;
+      }
+
+      if (dateStr === todayStr) cell.classList.add('today');
+      
+      cell.onclick = () => openModal(dateStr);
+      grid.appendChild(cell);
+    }
+
+    renderMonthSummary();
+    renderAllPaymentsList();
+  }
+
+  function renderMonthSummary() {
+    const year = currentDate.getFullYear();
+    const month = currentDate.getMonth();
+    const monthPayments = getMonthPayments(year, month);
+    
+    let total = 0;
+    let paid = 0;
+    
+    monthPayments.forEach(({payment, date}) => {
+      const amount = parseFloat(payment.amount) || 0;
+      total += amount;
+      if (isPaymentPaidOnDate(payment, date)) {
+        paid += amount;
+      }
+    });
+    
+    const pending = total - paid;
+    const percent = total > 0 ? Math.round((paid / total) * 100) : 0;
+
+    document.getElementById('totalAmount').textContent = `${total.toLocaleString()}₽`;
+    document.getElementById('paidAmount').textContent = `${paid.toLocaleString()}₽`;
+    document.getElementById('pendingAmount').textContent = `${pending.toLocaleString()}₽`;
+    document.getElementById('progressPercent').textContent = `${percent}%`;
+
+    const listEl = document.getElementById('monthPayments');
+    
+    // Разделяем на оплаченные и неоплаченные
+    const pendingItems = monthPayments.filter(({payment, date}) => !isPaymentPaidOnDate(payment, date));
+    const paidItems = monthPayments.filter(({payment, date}) => isPaymentPaidOnDate(payment, date));
+    
+    if (pendingItems.length === 0 && paidItems.length === 0) {
+      listEl.innerHTML = '<p style="color:#888;font-size:13px;text-align:center;padding:8px;">Нет платежей в этом месяце</p>';
+      return;
+    }
+
+    let html = '';
+    
+    if (pendingItems.length > 0) {
+      html += pendingItems.map(({payment, date}) => {
+        const idx = payments.indexOf(payment);
+        const dateObj = parseLocalDate(date);
+        const day = dateObj.getDate();
+        return `
+          <div class="payment-item">
+            <input type="checkbox" class="payment-checkbox" onchange="togglePaid(${idx}, '${date}')">
+            <div class="payment-info">
+              <div class="payment-name">${payment.name}</div>
+              <div class="payment-date">${day} ${monthNames[month]} ${payment.repeat !== 'none' ? '• ' + (payment.repeat === 'monthly' ? 'ежемес.' : 'ежегод.') : ''}</div>
+            </div>
+            <div class="payment-amount">${parseFloat(payment.amount).toLocaleString()}₽</div>
+            <button class="payment-delete" onclick="deletePayment(${idx})">×</button>
+          </div>
+        `;
+      }).join('');
+    }
+    
+    if (paidItems.length > 0) {
+      html += '<div style="font-size:12px;color:#888;margin:12px 0 8px;font-weight:600;">✓ Оплаченные</div>';
+      html += paidItems.map(({payment, date}) => {
+        const idx = payments.indexOf(payment);
+        const dateObj = parseLocalDate(date);
+        const day = dateObj.getDate();
+        return `
+          <div class="payment-item paid">
+            <input type="checkbox" class="payment-checkbox" checked onchange="togglePaid(${idx}, '${date}')">
+            <div class="payment-info">
+              <div class="payment-name">${payment.name}</div>
+              <div class="payment-date">${day} ${monthNames[month]} ${payment.repeat !== 'none' ? '• ' + (payment.repeat === 'monthly' ? 'ежемес.' : 'ежегод.') : ''}</div>
+            </div>
+            <div class="payment-amount">${parseFloat(payment.amount).toLocaleString()}₽</div>
+            <button class="payment-delete" onclick="deletePayment(${idx})">×</button>
+          </div>
+        `;
+      }).join('');
+    }
+    
+    listEl.innerHTML = html;
+  }
+
+  function renderAllPaymentsList() {
+    const list = document.getElementById('allPaymentsList');
+    const activePayments = payments.filter(p => {
+      // Показываем платежи, у которых есть хотя бы одна неоплаченная дата в будущем
+      return true; // показываем все
+    });
+    
+    if (activePayments.length === 0) {
+      list.innerHTML = '<p style="color:#888;font-size:13px;text-align:center;margin-top:12px;">Нет платежей</p>';
+      return;
+    }
+    
+    list.innerHTML = '<h3 style="font-size:14px;margin:12px 0 8px;">📋 Все платежи</h3>' + 
+      activePayments.map((p) => {
+        const idx = payments.indexOf(p);
+        const paidCount = p.paidDates ? p.paidDates.length : 0;
+        return `
+          <div class="all-payment-item">
+            <div class="info">
+              <div class="name">${p.name} ${paidCount > 0 ? `<span style="color:#4caf50;font-size:11px;">✓${paidCount}</span>` : ''}</div>
+              <div class="date">${p.date} ${p.repeat !== 'none' ? '• ' + (p.repeat === 'monthly' ? 'ежемес.' : 'ежегод.') : ''}</div>
+            </div>
+            <div class="sum">${parseFloat(p.amount).toLocaleString()}₽</div>
+            <button class="delete" onclick="deletePayment(${idx})">×</button>
+          </div>
+        `;
+      }).join('');
+  }
+
+  // Отметить платёж как оплаченный на КОНКРЕТНУЮ дату
+  function togglePaid(index, dateStr) {
+    const payment = payments[index];
+    if (!payment.paidDates) payment.paidDates = [];
+    
+    const paidIndex = payment.paidDates.indexOf(dateStr);
+    if (paidIndex > -1) {
+      // Снимаем отметку
+      payment.paidDates.splice(paidIndex, 1);
+    } else {
+      // Ставим отметку
+      payment.paidDates.push(dateStr);
+    }
+    
+    save();
+    render();
+  }
+
+  function openModal(dateStr) {
+    document.getElementById('modal').classList.add('active');
+    if (dateStr) document.getElementById('payDate').value = dateStr;
+    document.getElementById('riskDays').value = riskDays;
+  }
+
+  function closeModal() {
+    document.getElementById('modal').classList.remove('active');
+    document.getElementById('payName').value = '';
+    document.getElementById('payAmount').value = '';
+    document.getElementById('payDate').value = '';
+    document.getElementById('payRepeat').value = 'none';
+  }
+
+  function savePayment() {
+    const name = document.getElementById('payName').value.trim();
+    const amount = document.getElementById('payAmount').value;
+    const date = document.getElementById('payDate').value;
+    const repeat = document.getElementById('payRepeat').value;
+    
+    riskDays = parseInt(document.getElementById('riskDays').value) || 5;
+
+    if (!name || !date) {
+      alert('Заполните название и дату!');
+      return;
+    }
+
+    payments.push({ 
+      name, 
+      amount: amount || 0, 
+      date, 
+      repeat,
+      paidDates: [],
+      id: Date.now()
+    });
+    save();
+    render();
+    closeModal();
+  }
+
+  function deletePayment(index) {
+    if (confirm('Удалить этот платёж?')) {
+      payments.splice(index, 1);
+      save();
+      render();
+    }
+  }
+
+  function clearAll() {
+    if (confirm('Удалить все платежи?')) {
+      payments = [];
+      save();
+      render();
+    }
+  }
+
+  document.getElementById('modal').onclick = (e) => {
+    if (e.target.id === 'modal') closeModal();
+  };
+
+  render();
+</script>
+
+</body>
+</html>
